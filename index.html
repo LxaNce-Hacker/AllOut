@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AllOut - Logout Everywhere</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding-top: 2rem;
+    }
+
+    h1 {
+      font-size: 3.5rem;
+      font-weight: 800;
+      margin-bottom: 1rem;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .subtitle {
+      font-size: 1.2rem;
+      opacity: 0.9;
+    }
+
+    .sites-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 1rem;
+      list-style: none;
+    }
+
+    .site-card {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 1rem;
+      border-radius: 10px;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .site-card:hover {
+      transform: translateY(-2px);
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .site-name {
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+
+    .status {
+      font-size: 0.9rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      float: right;
+    }
+
+    .status-pending {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .status-success {
+      background: #10B981;
+    }
+
+    .status-error {
+      background: #EF4444;
+    }
+
+    .hidden {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      top: -10px;
+      left: -10px;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      font-size: 0.9rem;
+      opacity: 0.7;
+    }
+  </style>
+  <script>
+    function cleanup(func, el, delayCleanup) {
+      return function() {
+        if (delayCleanup) {
+          delayCleanup = false;
+          return;
+        }
+        func();
+        el.parentNode.removeChild(el);
+      };
+    }
+
+    function get(url) {
+      return function(success, error) {
+        var img = document.createElement("img");
+        img.onload = cleanup(success, img);
+        img.onerror = cleanup(success, img);
+        img.className = "hidden";
+        document.body.appendChild(img);
+        img.src = url;
+      };
+    }
+
+    var numPostFrames = 0;
+    function post(url, params, fakeOk) {
+      params = params || {};
+      return function(success, error) {
+        var form = document.createElement("form");
+        var iframe = document.createElement("iframe");
+
+        iframe.className = "hidden";
+        iframe.onload = cleanup(cleanup(success, form), iframe, true);
+        iframe.onerror = cleanup(cleanup(error, form), iframe, true);
+        iframe.name = "iframe" + numPostFrames++;
+        document.body.appendChild(iframe);
+
+        form.action = url;
+        form.method = "POST";
+        form.target = iframe.name;
+
+        for (var param in params) {
+          if (params.hasOwnProperty(param)) {
+            var input = document.createElement("input");
+            input.type = "hidden";
+            input.name = param;
+            input.value = params[param];
+            form.appendChild(input);
+          }
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+
+        if (fakeOk) {
+          success();
+        }
+      };
+    }
+
+    function and(one, two) {
+      return function(success, error) {
+        var oneSuccess = false;
+        var twoSuccess = false;
+        var oneSuccessFunc = function() {
+          oneSuccess = true;
+          if (twoSuccess) {
+            success();
+          }
+        };
+        var twoSuccessFunc = function() {
+          twoSuccess = true;
+          if (oneSuccess) {
+            success();
+          }
+        };
+        one(oneSuccessFunc, error);
+        two(twoSuccessFunc, error);
+      }
+    }
+
+    function doSites(list, sites) {
+      sites.forEach(function(site) {
+        if (!site.length) {
+          return;
+        }
+
+        var name = site[0];
+        var action = site[1];
+
+        var li = document.createElement("li");
+        li.className = "site-card";
+
+        var nameSpan = document.createElement("span");
+        nameSpan.className = "site-name";
+        nameSpan.textContent = name;
+
+        var statusSpan = document.createElement("span");
+        statusSpan.className = "status status-pending";
+        statusSpan.textContent = "Logging out...";
+
+        li.appendChild(nameSpan);
+        li.appendChild(statusSpan);
+
+        var success = function() {
+          statusSpan.textContent = "Success";
+          statusSpan.className = "status status-success";
+        };
+        var error = function() {
+          statusSpan.textContent = "Failed";
+          statusSpan.className = "status status-error";
+        };
+
+        action(success, error);
+
+        list.appendChild(li);
+      });
+    }
+
+    window.onload = function() {
+      doSites(document.getElementById("sitelist"), [
+        ["AOL", and(get("http://my.screenname.aol.com/_cqr/logout/mcLogout.psp?sitedomain=startpage.aol.com&authLev=0&lang=en&locale=us"), get("https://api.screenname.aol.com/auth/logout?state=snslogout&r=" + Math.random()))],
+        ["Amazon", get("http://www.amazon.com/gp/flex/sign-out.html?action=sign-out")],
+        ["Blogger", get("http://www.blogger.com/logout.g")],
+        ["Delicious", get("http://www.delicious.com/logout")],
+        ["DeviantART", post("http://www.deviantart.com/users/logout")],
+        ["DreamHost", get("https://panel.dreamhost.com/index.cgi?Nscmd=Nlogout")],
+        ["Dropbox", get("https://www.dropbox.com/logout")],
+        ["eBay", get("https://signin.ebay.com/ws/eBayISAPI.dll?SignIn")],
+        ["Gandi", get("https://www.gandi.net/login/out")],
+        ["GitHub", get("https://github.com/logout")],
+        ["GMail", get("http://mail.google.com/mail/?logout")],
+        ["Google", get("https://www.google.com/accounts/Logout")],
+        ["Hulu", get("https://secure.hulu.com/logout")],
+        ["Instapaper", get("http://www.instapaper.com/user/logout")],
+        ["Linode", get("https://manager.linode.com/session/logout")],
+        ["LiveJournal", post("http://www.livejournal.com/logout.bml", {"action:killall": "1"})],
+        ["MySpace", get("http://www.myspace.com/index.cfm?fuseaction=signout")],
+        ["NetFlix", get("http://www.netflix.com/Logout")],
+        ["New York Times", get("http://www.nytimes.com/logout")],
+        ["Newegg", get("https://secure.newegg.com/NewMyAccount/AccountLogout.aspx")],
+        ["Photobucket", get("http://photobucket.com/logout")],
+        ["Skype", get("https://secure.skype.com/account/logout")],
+        ["Slashdot", get("http://slashdot.org/my/logout")],
+        ["SoundCloud", get("http://soundcloud.com/logout")],
+        ["Steam Community", get("http://steamcommunity.com/?action=doLogout")],
+        ["Steam Store", get("http://store.steampowered.com/logout/")],
+        ["ThinkGeek", get("https://www.thinkgeek.com/brain/account/login.cgi?a=lo")],
+        ["Threadless", get("http://www.threadless.com/logout")],
+        ["Tumblr", get("http://www.tumblr.com/logout")],
+        ["Vimeo", get("http://vimeo.com/log_out")],
+        ["Wikipedia", get("http://en.wikipedia.org/w/index.php?title=Special:UserLogout")],
+        ["Windows Live", get("http://login.live.com/logout.srf")],
+        ["Woot", get("https://account.woot.com/logout")],
+        ["Wordpress", get("https://wordpress.com/wp-login.php?action=logout")],
+        ["Yahoo!", get("https://login.yahoo.com/config/login?.src=fpctx&logout=1&.direct=1&.done=http://www.yahoo.com/")],
+        ["YouTube", post("http://www.youtube.com", {"action_logout": "1"}, true)],
+        []
+      ]);
+    };
+  </script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>AllOut</h1>
+      <p class="subtitle">Securely logout from all your online accounts with one click</p>
+    </header>
+
+    <ul id="sitelist" class="sites-grid">
+    </ul>
+
+    <footer>
+      <p>Stay safe. Log out everywhere.</p>
+    </footer>
+  </div>
+</body>
+</html>
